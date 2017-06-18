@@ -59,12 +59,11 @@ elif [[ "$1" == "list" ]];then
 map({\
 InstanceId\
 ,state:.State.Name\
-,Tags:(.Tags|map(\"\\(.Key)-\\(.Value)\"))\
+,Tags:(.Tags//[]|map(\"\\(.Key?)-\\(.Value?)\"))\
 ,PublicIpAddress\
 ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
 })" \
     | jq -M '.|sort_by(.state)|reverse'
-# ,InstanceType\
 
 elif [[ "$1" == "details" ]];then
   shift;
