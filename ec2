@@ -6,6 +6,8 @@ set -o errexit
 set -o nounset
 trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
 
+ec2_ip_script="$(dirname $(realpath $0))/get_ec2_ip"
+
 function get_instance_id_from_input () {
   if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
     instanceid="$1"
@@ -58,7 +60,11 @@ elif [[ "$1" == "create" ]];then shift
   fi
 
 elif [[ "$1" == "delete" ]];then shift
-  if [[ "$#" -gt 1 ]];then
+  if [[ "$#" -eq  1 ]] && [[ "$1" == "all" ]];then
+    $0 list running | jq -r 'map(.InstanceId)[]' \
+    | parallel "$0 delete {}"
+
+  elif [[ "$#" -gt 1 ]];then
     echo "$@" | tr ' ' '\n' | parallel "$0 delete {}"
   else
     get_instance_id_from_input $@
@@ -93,24 +99,9 @@ elif [[ "$1" == "details" ]];then
   aws ec2 describe-instances \
     --instance-ids "$instanceid"
 
-elif [[ "$1" == "ssh" ]];then
-  shift;
-  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
-    instance_ip="$1"
-    shift
-  elif [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
-    instance_ip="$( $0 details $1 \
-      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
-    )"
-    shift
-  else
-    get_instance_id_from_input $@
-    instance_ip="$( $0 details $instanceid \
-      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
-    )"
-  fi
+elif [[ "$1" == "ssh" ]];then shift
+  instance_ip="$( $ec2_ip_script $1 )"
   echo "connecting to: $instance_ip"
-
   if [[ ! -t 0 ]]; then
     ssh \
       -q \
