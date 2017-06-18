@@ -31,27 +31,38 @@ esac; done; shift $((OPTIND - 1))
 if [[ "$#" -eq 0 ]];then
   $0 list
 
-elif [[ "$1" == "create" ]];then
-  instanceid="$( aws ec2 run-instances \
-            --image-id "${AMI_ID}" \
-            --key-name "${key_name}" \
-            --instance-type "${instance_type}" \
-            --security-groups "${security_group}" \
-            --placement "${placement}" \
-    | jq -M -r '.Instances[0].InstanceId'
-  )"
-  if [[ -n "$instance_name" ]];then
-    aws ec2 create-tags \
-      --resources ${instanceid} \
-      --tags "Key=Name,Value=${instance_name}"
+elif [[ "$1" == "create" ]];then shift
+  if [[ "$#" -gt 1 ]];then
+    echo "$@" | tr ' ' '\n' | parallel "$0 create {}"
+  else
+    instanceid="$( aws ec2 run-instances \
+              --image-id "${AMI_ID}" \
+              --key-name "${key_name}" \
+              --instance-type "${instance_type}" \
+              --security-groups "${security_group}" \
+              --placement "${placement}" \
+      | jq -M -r '.Instances[0].InstanceId'
+    )"
+    if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+      instance_name="$1"
+      shift
+      aws ec2 create-tags \
+        --resources ${instanceid} \
+        --tags "Key=Name,Value=${instance_name}"
+      echo "created $instance_name: $instanceid"
+    else
+      echo "created: $instanceid"
+    fi
   fi
-  echo "$instanceid"
 
-elif [[ "$1" == "delete" ]];then
-  shift;
-  get_instance_id_from_input $@
-  aws ec2 terminate-instances \
-    --instance-ids "$instanceid"
+elif [[ "$1" == "delete" ]];then shift
+  if [[ "$#" -gt 1 ]];then
+    echo "$@" | tr ' ' '\n' | parallel "$0 delete {}"
+  else
+    get_instance_id_from_input $@
+    aws ec2 terminate-instances \
+      --instance-ids "$instanceid"
+  fi
 
 elif [[ "$1" == "list" ]];then
   aws ec2 describe-instances \
