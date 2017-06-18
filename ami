@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+if [[ "$1" == "list" ]];then
+  aws ec2 describe-images \
+    --owners amazon \
+    --filters "Name=name,Values=amzn-ami-hvm-*" \
+    "Name=description,Values=Amazon Linux AMI *" \
+    "Name=creation-date,Values=2017*" \
+    "Name=is-public,Values=true" \
+    "Name=architecture,Values=x86_64" \
+    "Name=root-device-type,Values=ebs" \
+    "Name=virtualization-type,Values=hvm" \
+    "Name=hypervisor,Values=xen" \
+    "Name=state,Values=available" \
+    "Name=image-type,Values=machine" \
+    "Name=block-device-mapping.volume-type,Values=standard"
+
+elif [[ "$1" == "latest" ]];then
+  $0 list \
+  | jq -r -M '.Images | map(select(.Name|contains(".rc-")|not))|sort_by(.CreationDate)|reverse|.[0]|.ImageId'
+
+else
+  $0 list
+
+fi

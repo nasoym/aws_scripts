@@ -1,0 +1,224 @@
+#!/usr/bin/env bash
+
+set -f
+set -o pipefail
+set -o errexit
+set -o nounset
+trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
+
+function get_instance_id_from_input () {
+  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+    instanceid="$1"
+    shift
+  else
+    instanceid="$( $0 \
+      | jq -r -M 'map(select(.state=="running"))[0].InstanceId?//empty'
+    )"
+    if [[ -z "$instanceid" ]];then
+      unset instanceid
+    fi
+  fi
+}
+
+while getopts "hn:" options; do case $options in
+  n) instance_name="$OPTARG" ;;
+  h) exit ;;
+esac; done; shift $((OPTIND - 1))
+
+[[ -r ~/.aws_tools_rc ]] && { source ~/.aws_tools_rc; }
+: ${instance_name:=""}
+
+if [[ "$#" -eq 0 ]];then
+  $0 list
+
+elif [[ "$1" == "create" ]];then
+  instanceid="$( aws ec2 run-instances \
+            --image-id "${AMI_ID}" \
+            --key-name "${key_name}" \
+            --instance-type "${instance_type}" \
+            --security-groups "${security_group}" \
+            --placement "${placement}" \
+    | jq -M -r '.Instances[0].InstanceId'
+  )"
+  if [[ -n "$instance_name" ]];then
+    aws ec2 create-tags \
+      --resources ${instanceid} \
+      --tags "Key=Name,Value=${instance_name}"
+  fi
+  echo "$instanceid"
+
+elif [[ "$1" == "delete" ]];then
+  shift;
+  get_instance_id_from_input $@
+  aws ec2 terminate-instances \
+    --instance-ids "$instanceid"
+
+elif [[ "$1" == "list" ]];then
+  aws ec2 describe-instances \
+    | jq -M "[.Reservations[]|.Instances[0]]|\
+map({\
+InstanceId\
+,state:.State.Name\
+,Tags:(.Tags|map(\"\\(.Key)-\\(.Value)\"))\
+,PublicIpAddress\
+,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
+})" \
+    | jq -M '.|sort_by(.state)|reverse'
+# ,InstanceType\
+
+elif [[ "$1" == "details" ]];then
+  shift;
+  get_instance_id_from_input $@
+  aws ec2 describe-instances \
+    --instance-ids "$instanceid"
+
+elif [[ "$1" == "ssh" ]];then
+  shift;
+  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
+    instance_ip="$1"
+    shift
+  elif [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+    instance_ip="$( $0 details $1 \
+      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
+    )"
+    shift
+  else
+    get_instance_id_from_input $@
+    instance_ip="$( $0 details $instanceid \
+      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
+    )"
+  fi
+  echo "connecting to: $instance_ip"
+
+  if [[ ! -t 0 ]]; then
+    ssh \
+      -q \
+      -i ${private_key_location} \
+      -o UserKnownHostsFile=/dev/null \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=30 \
+      -o ConnectionAttempts=50 \
+      ec2-user@${instance_ip} <<<"$(cat)"
+  else
+    ssh \
+      -q \
+      -i ${private_key_location} \
+      -o UserKnownHostsFile=/dev/null \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=30 \
+      -o ConnectionAttempts=50 \
+      ec2-user@${instance_ip}
+  fi
+
+elif [[ "$1" == "ssh-port" ]];then
+  shift;
+  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
+    instance_ip="$1"
+    shift
+  elif [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+    instance_ip="$( $0 details $1 \
+      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
+    )"
+    shift
+  else
+    get_instance_id_from_input $@
+    instance_ip="$( $0 details $instanceid \
+      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
+    )"
+  fi
+  echo "connecting to: $instance_ip"
+
+  : ${port:="9090"}
+  ssh \
+    -q \
+    -i ${private_key_location} \
+    -o UserKnownHostsFile=/dev/null \
+    -o StrictHostKeyChecking=no \
+    -o ConnectTimeout=30 \
+    -o ConnectionAttempts=50 \
+    -NL 0.0.0.0:${port}:127.0.0.1:${port} \
+    ec2-user@${instance_ip}
+
+elif [[ "$1" == "network-list" ]];then
+  aws ec2 describe-network-interfaces \
+  | jq -M ".NetworkInterfaces\
+|map({\
+NetworkInterfaceId\
+,PrivateIpAddress\
+,Status\
+,Attachment\
+,AttachmentId:(.Attachment.AttachmentId)\
+,AttachedInstanceId:(.Attachment.InstanceId)\
+})\
+"
+
+elif [[ "$1" == "network-add" ]];then
+  shift;
+  get_instance_id_from_input $@
+  interfaceid="$( aws ec2 create-network-interface \
+          --subnet-id "${subnet_id}" \
+          --groups "${security_group_id}" \
+  | jq -M -r '.NetworkInterface.NetworkInterfaceId'
+  )"
+  attachmentid="$( aws ec2 attach-network-interface \
+          --network-interface-id "$interfaceid" \
+          --instance-id "$instanceid" \
+          --device-index 1 \
+  | jq -M -r '.AttachmentId'
+  )"
+  aws ec2 modify-network-interface-attribute \
+          --network-interface-id "$interfaceid" \
+          --attachment "AttachmentId=${attachmentid},DeleteOnTermination=true"
+
+elif [[ "$1" == "network-create" ]];then
+  aws ec2 create-network-interface \
+          --subnet-id "${subnet_id}" \
+          --groups "${security_group_id}" \
+  | jq -M -r '.NetworkInterface.NetworkInterfaceId'
+
+elif [[ "$1" == "network-attach" ]];then
+  shift;
+  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+    interfaceid="$1";shift
+  fi
+  get_instance_id_from_input $@
+  attachmentid="$( aws ec2 attach-network-interface \
+          --network-interface-id "$interfaceid" \
+          --instance-id "$instanceid" \
+          --device-index 1
+  | jq -M -r '.AttachmentId'
+  )"
+  aws ec2 modify-network-interface-attribute \
+          --network-interface-id "$interfaceid" \
+          --attachment "AttachmentId=${attachmentid},DeleteOnTermination=true"
+
+elif [[ "$1" == "network-delete" ]];then
+  shift;
+  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+    interfaceid="$1";shift
+  fi
+  aws ec2 delete-network-interface \
+          --network-interface-id "$interfaceid"
+
+elif [[ "$1" == "group-list" ]];then
+  aws ec2 describe-security-groups
+
+elif [[ "$1" == "subnet-list" ]];then
+  aws ec2 describe-subnets
+
+elif [[ "$1" == "address-list" ]];then
+  aws ec2 describe-addresses
+
+elif [[ "$1" == "address-attach" ]];then
+  shift
+  get_instance_id_from_input $@
+  aws ec2 associate-address \
+            --instance-id "$instanceid" \
+            --allocation-id "${address_allocation_id}" \
+            --allow-reassociation
+
+# elif [[ "$1" == "metrics" ]];then
+# aws_scripts:aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions "Name=InstanceId,Value=i-0a03275ee2de78ebb" --statistics Maximum --start-time "2017-06-11T00:00:00" --end-time "2017-06-11T12:10:00" --period 60
+
+fi
+
