@@ -8,26 +8,27 @@ set -o nounset
 ec2_script="$(dirname $(realpath $0) )/ec2"
 
 function get_instance_ip_from_input () {
-  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
+  if [[ "$#" -ge 1 ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
     instance_ip="$1"
-  elif [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
+
+  elif [[ "$#" -ge 1 ]] && [[ "$1" =~ ^i-[0-9a-f]*$ ]];then
     instance_ip="$( $ec2_script details $1 \
       | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
     )"
+
+  elif [[ "$#" -ge 1 ]];then
+    instance_ip="$($ec2_script -l list \
+      | jq -r "\
+.Reservations|\
+map(select(.Instances[0].Tags//[]|contains([{Value:\"$1\"}])))\
+|.[0].Instances[0].PublicIpAddress"
+    )"
+
   else
-    local instanceid="$( $ec2_script list \
-      | jq -r -M 'map(select(.state=="running"))[0].InstanceId?//empty'
-    )"
-    if [[ -z "$instanceid" ]];then
-      unset instanceid
-    fi
-    instance_ip="$( $ec2_script details $instanceid \
-      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
-    )"
+    instance_ip="$($ec2_script list running | jq -r '.[0].PublicIpAddress')"
   fi
 }
 
 get_instance_ip_from_input $@
 echo "$instance_ip"
-
 
