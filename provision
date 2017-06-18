@@ -38,13 +38,19 @@ if [[ "$#" -eq 0 ]];then
   exit
 
 elif [[ "$1" == "docker" ]];then shift
-  get_instance_ip_from_input $@
-  run_ssh_commands <<EOF
+  if [[ "$#" -gt 2 ]];then
+    first_command="$1"; shift
+    echo "$@" | tr ' ' '\n' | parallel "$0 $first_command {}"
+  elif [[ "$#" -eq 2 ]];then
+    shift
+    instance_ip="$( $ec2_ip_script $1 )"
+    run_ssh_commands <<EOF
 sudo yum install -y docker
 sudo service docker start
 sudo usermod -a -G docker ec2-user
 sudo pip install docker-compose
 EOF
+  fi
 
 elif [[ "$1" == "update" ]];then shift
   get_instance_ip_from_input $@
@@ -58,9 +64,14 @@ elif [[ "$1" == "tools" ]];then shift
 sudo yum install -y git jq
 EOF
 
-elif [[ "$1" == "monitor_daemons" ]];then shift
-  get_instance_ip_from_input $@
-  run_ssh_commands <<EOF
+elif [[ "$1" == "monitor_daemons" ]];then 
+  if [[ "$#" -gt 2 ]];then
+    first_command="$1"; shift
+    echo "$@" | tr ' ' '\n' | parallel "$0 $first_command {}"
+  elif [[ "$#" -eq 2 ]];then
+    shift
+    instance_ip="$( $ec2_ip_script $1 )"
+    run_ssh_commands <<EOF
 docker rm -f node-exporter
 docker run \
   --detach=true \
@@ -92,6 +103,7 @@ sudo docker run \
 docker ps -a
 
 EOF
+  fi
 
 elif [[ "$1" == "prometheus" ]];then shift
   get_instance_ip_from_input $@
