@@ -20,13 +20,15 @@ function get_instance_id_from_input () {
   fi
 }
 
-while getopts "hn:" options; do case $options in
+while getopts "hln:" options; do case $options in
+  l) long_output=1 ;;
   n) instance_name="$OPTARG" ;;
   h) exit ;;
 esac; done; shift $((OPTIND - 1))
 
 [[ -r ~/.aws_tools_rc ]] && { source ~/.aws_tools_rc; }
 : ${instance_name:=""}
+: ${long_output:=0}
 
 if [[ "$#" -eq 0 ]];then
   $0 list
@@ -65,16 +67,25 @@ elif [[ "$1" == "delete" ]];then shift
   fi
 
 elif [[ "$1" == "list" ]];then
-  aws ec2 describe-instances \
-    | jq -M "[.Reservations[]|.Instances[0]]|\
+  raw_instance_description="$( aws ec2 describe-instances )"
+  short_instance_description="$( jq -M "[.Reservations[]|.Instances[0]]|\
 map({\
 InstanceId\
 ,state:.State.Name\
 ,Tags:(.Tags//[]|map(\"\\(.Key?)-\\(.Value?)\"))\
 ,PublicIpAddress\
 ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
-})" \
-    | jq -M '.|sort_by(.state)|reverse'
+})|sort_by(.state)|reverse" <<<"$raw_instance_description" )"
+
+  if [[ $long_output -eq 1 ]];then
+    echo "$raw_instance_description"
+  elif [[ "$#" -gt 1 ]];then
+    state_filter="$1"
+    shift
+    jq 'map(select(.state=="running"))' <<<"$short_instance_description"
+  else
+    jq '.' <<<"$short_instance_description"
+  fi
 
 elif [[ "$1" == "details" ]];then
   shift;
