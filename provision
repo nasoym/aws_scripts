@@ -46,6 +46,12 @@ sudo usermod -a -G docker ec2-user
 sudo pip install docker-compose
 EOF
 
+elif [[ "$1" == "update" ]];then shift
+  get_instance_ip_from_input $@
+  run_ssh_commands <<EOF
+sudo yum update 
+EOF
+
 elif [[ "$1" == "tools" ]];then shift
   get_instance_ip_from_input $@
   run_ssh_commands <<EOF
