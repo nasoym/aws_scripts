@@ -148,7 +148,7 @@ elif [[ "$1" == "list" ]];then shift
   fi
 
 elif [[ "$1" == "details" ]];then shift
-  instance_id="$1"; shift
+  instance_id="$( $get_ec2_id_script $@ )"
   $0 list \
     | jq "map(select(.InstanceId==\"${instance_id}\"))[]"
 
