@@ -34,9 +34,10 @@ function write_to_cache_file() {
   fi
 }
 
-while getopts "hlqn" options; do case $options in
+while getopts "hlqnv" options; do case $options in
   l) long_output=1 ;;
   q) quiet=1 ;;
+  v) quiet=0 ;;
   n) use_cache=0 ;;
   h) exit ;;
 esac; done; shift $((OPTIND - 1))
@@ -44,7 +45,7 @@ esac; done; shift $((OPTIND - 1))
 [[ -r ~/.aws_tools_rc ]] && { source ~/.aws_tools_rc; }
 # set -a
 : ${long_output:=0}
-: ${quiet:=0}
+: ${quiet:=1}
 : ${use_cache:=1}
 export long_output quiet use_cache
 
@@ -151,17 +152,17 @@ elif [[ "$1" == "details" ]];then shift
   $0 list \
     | jq "map(select(.InstanceId==\"${instance_id}\"))[]"
 
-elif [[ "$1" == "test-ip" ]];then shift
+elif [[ "$1" == "get-ip" ]];then shift
   instance_ip="$( $get_ec2_ip_script $@ )"
-  echo "ip for $@: $instance_ip"
+  echo "$instance_ip"
 
-elif [[ "$1" == "test-id" ]];then shift
+elif [[ "$1" == "get-id" ]];then shift
   instance_id="$( $get_ec2_id_script $@ )"
-  echo "id for $@: $instance_id"
+  echo "$instance_id"
 
 elif [[ "$1" == "ssh" ]];then shift
   instance_ip="$( $get_ec2_ip_script $@ )"
-  echo "connecting to: $instance_ip"
+  log "connecting to: $instance_ip"
   if [[ ! -t 0 ]]; then
     ssh \
       -q \
@@ -184,7 +185,7 @@ elif [[ "$1" == "ssh" ]];then shift
 
 elif [[ "$1" == "ssh-port" ]];then shift
   instance_ip="$( $get_ec2_ip_script $@ )"
-  echo "connecting to: $instance_ip"
+  log "connecting to: $instance_ip"
   : ${port:="9090"}
   ssh \
     -q \
@@ -327,6 +328,10 @@ elif [[ "$1" == "address-attach" ]];then
 
 # elif [[ "$1" == "metrics" ]];then
 # aws_scripts:aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions "Name=InstanceId,Value=i-0a03275ee2de78ebb" --statistics Maximum --start-time "2017-06-11T00:00:00" --end-time "2017-06-11T12:10:00" --period 60
+
+else
+  echo "unkown command: $@" >&2
+  exit 1
 
 fi
 
