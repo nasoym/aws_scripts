@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+
+set -f
+set -o pipefail
+set -o errexit
+set -o nounset
+trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
+
+ec2_script="$(dirname $(realpath $0))/../ec2"
+
+if [[ "$#" -ge 1 ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
+  instance_id="$($ec2_script list \
+    | jq "map(select(.PublicIpAddress==\"$1\"))" \
+    | jq -r '.[0].InstanceId')"
+
+elif [[ "$#" -ge 1 ]] && [[ "$1" =~ ^i-[0-9a-f]*$ ]];then
+  instance_id="$1"
+
+elif [[ "$#" -ge 1 ]];then
+  instance_id="$($ec2_script -l list \
+    | jq -r "map(select(.Tags//[]|contains([{Value:\"$1\"}])))\
+            |.[0].InstanceId"
+  )"
+
+else
+  instance_id="$($ec2_script list \
+    | jq 'map(select(.state=="running"))' \
+    | jq -r '.[0].InstanceId')"
+fi
+
+if [[ -z "$instance_id" ]];then
+  echo "cannot determine instance ip from : $@" >&2
+  exit 1
+fi
+echo "$instance_id"
+
