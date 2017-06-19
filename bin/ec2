@@ -6,40 +6,64 @@ set -o errexit
 set -o nounset
 trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
 
-ec2_ip_script="$(dirname $(realpath $0))/get_ec2_ip"
+get_ec2_ip_script="$(dirname $(realpath $0))/lib/get_ec2_ip"
+get_ec2_id_script="$(dirname $(realpath $0))/lib/get_ec2_id"
 
-function get_instance_id_from_input () {
-  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
-    instanceid="$1"
-    shift
-  else
-    instanceid="$( $0 \
-      | jq -r -M 'map(select(.state=="running"))[0].InstanceId?//empty'
-    )"
-    if [[ -z "$instanceid" ]];then
-      unset instanceid
-    fi
+function log() {
+  if [[ "$quiet" -ne 1 ]];then
+    echo "$@" >&2
   fi
 }
 
-while getopts "hln:" options; do case $options in
+function clear_cache_file() {
+  if [[ "$use_cache" -eq 1 ]] && [[ -d "${HOME}/.cache/ec2" ]];then
+    find ${HOME}/.cache/ec2 -name 'list-[0-9T-]*' -delete
+  fi
+}
+
+function get_cache_file() {
+  if [[ "$use_cache" -eq 1 ]] && [[ -d "${HOME}/.cache/ec2" ]];then
+    find ${HOME}/.cache/ec2 -name 'list-[0-9T-]*' -cmin -30 -print -quit
+  fi
+}
+
+function write_to_cache_file() {
+  if [[ "$use_cache" -eq 1 ]];then
+    mkdir -p ${HOME}/.cache/ec2
+    cat > ${HOME}/.cache/ec2/list-$(date +%FT%H-%M-%S)
+  fi
+}
+
+while getopts "hlqn" options; do case $options in
   l) long_output=1 ;;
-  n) instance_name="$OPTARG" ;;
+  q) quiet=1 ;;
+  n) use_cache=0 ;;
   h) exit ;;
 esac; done; shift $((OPTIND - 1))
 
 [[ -r ~/.aws_tools_rc ]] && { source ~/.aws_tools_rc; }
-: ${instance_name:=""}
+# set -a
 : ${long_output:=0}
+: ${quiet:=0}
+: ${use_cache:=1}
+export long_output quiet use_cache
 
 if [[ "$#" -eq 0 ]];then
   $0 list
 
 elif [[ "$1" == "create" ]];then shift
+  clear_cache_file
   if [[ "$#" -gt 1 ]];then
-    echo "$@" | tr ' ' '\n' | parallel "$0 create {}"
+    log "create instance names from arguments: $@"
+    echo "$@" | tr ' ' '\n' | parallel "$0 create {} </dev/null"
+
+  elif [[ -p /dev/stdin ]]; then
+    log "create instance names from stdin"
+    cat | parallel "$0 create {} </dev/null"
+
   else
-    instanceid="$( aws ec2 run-instances \
+    log "create one instance"
+    instance_id="$( aws ec2 run-instances \
               --image-id "${AMI_ID}" \
               --key-name "${key_name}" \
               --instance-type "${instance_type}" \
@@ -48,59 +72,80 @@ elif [[ "$1" == "create" ]];then shift
       | jq -M -r '.Instances[0].InstanceId'
     )"
     if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
-      instance_name="$1"
-      shift
+      instance_name="$1"; shift
+      log "name instance: $instance_name"
       aws ec2 create-tags \
-        --resources ${instanceid} \
+        --resources ${instance_id} \
         --tags "Key=Name,Value=${instance_name}"
-      echo "created $instance_name: $instanceid"
+      echo "created $instance_name: $instance_id"
     else
-      echo "created: $instanceid"
+      echo "created: $instance_id"
     fi
   fi
 
 elif [[ "$1" == "delete" ]];then shift
   if [[ "$#" -eq  1 ]] && [[ "$1" == "all" ]];then
-    $0 list running | jq -r 'map(.InstanceId)[]' \
-    | parallel "$0 delete {}"
+    $0 list running \
+    | jq 'map(select(.state=="running"))' \
+    | jq -r 'map(.InstanceId)[]' \
+    | $0 delete
 
   elif [[ "$#" -gt 1 ]];then
-    echo "$@" | tr ' ' '\n' | parallel "$0 delete {}"
+    log "delete instance names from arguments: $@"
+    echo "$@" | tr ' ' '\n' | parallel "$0 delete {} </dev/null"
+
+  elif [[ -p /dev/stdin ]]; then
+    log "delete instance names from stdin"
+    cat | parallel "$0 delete {} </dev/null"
+
   else
-    get_instance_id_from_input $@
+    instance_id="$( $get_ec2_id_script $@ )"
     aws ec2 terminate-instances \
-      --instance-ids "$instanceid"
+      --instance-ids "$instance_id"
+    clear_cache_file
   fi
 
-elif [[ "$1" == "list" ]];then
-  raw_instance_description="$( aws ec2 describe-instances )"
-  short_instance_description="$( jq -M "[.Reservations[]|.Instances[0]]|\
-map({\
-InstanceId\
-,state:.State.Name\
-,Tags:(.Tags//[]|map(\"\\(.Key?)-\\(.Value?)\"))\
-,PublicIpAddress\
-,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
-})|sort_by(.state)|reverse" <<<"$raw_instance_description" )"
-
-  if [[ $long_output -eq 1 ]];then
-    echo "$raw_instance_description"
-  elif [[ "$#" -gt 1 ]];then
-    state_filter="$1"
-    shift
-    jq 'map(select(.state=="running"))' <<<"$short_instance_description"
+elif [[ "$1" == "list" ]];then shift
+  cache_file="$(get_cache_file)"
+  if [[ -n "$cache_file" ]];then
+    log "using cache file: $cache_file"
+    raw_instance_description="$(cat $cache_file)"
   else
-    jq '.' <<<"$short_instance_description"
+    raw_instance_description="$(aws ec2 describe-instances)"
+    write_to_cache_file <<<"$raw_instance_description"
   fi
 
-elif [[ "$1" == "details" ]];then
-  shift;
-  get_instance_id_from_input $@
-  aws ec2 describe-instances \
-    --instance-ids "$instanceid"
+  instances_list="$(jq ".Reservations|map(.Instances[0])" \
+    <<<"$raw_instance_description" )"
+  if [[ $long_output -eq 1 ]];then
+    echo "$instances_list"
+  else
+    jq "map({\
+          InstanceId\
+          ,state:.State.Name\
+          ,Tags:(.Tags//[]|map(\"\\(.Key?)-\\(.Value?)\"))\
+          ,PublicIpAddress\
+          ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
+          })\
+          |sort_by(.state)|reverse" \
+        <<<"$instances_list"
+  fi
+
+elif [[ "$1" == "details" ]];then shift
+  instance_id="$1"; shift
+  $0 list \
+    | jq "map(select(.InstanceId==\"${instance_id}\"))[]"
+
+elif [[ "$1" == "test-ip" ]];then shift
+  instance_ip="$( $get_ec2_ip_script $@ )"
+  echo "ip for $@: $instance_ip"
+
+elif [[ "$1" == "test-id" ]];then shift
+  instance_id="$( $get_ec2_id_script $@ )"
+  echo "id for $@: $instance_id"
 
 elif [[ "$1" == "ssh" ]];then shift
-  instance_ip="$( $ec2_ip_script $1 )"
+  instance_ip="$( $get_ec2_ip_script $@ )"
   echo "connecting to: $instance_ip"
   if [[ ! -t 0 ]]; then
     ssh \
@@ -122,24 +167,9 @@ elif [[ "$1" == "ssh" ]];then shift
       ec2-user@${instance_ip}
   fi
 
-elif [[ "$1" == "ssh-port" ]];then
-  shift;
-  if [[ "$#" -ge 1 ]] && [[ -n "$1" ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
-    instance_ip="$1"
-    shift
-  elif [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
-    instance_ip="$( $0 details $1 \
-      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
-    )"
-    shift
-  else
-    get_instance_id_from_input $@
-    instance_ip="$( $0 details $instanceid \
-      | jq -r -M '.Reservations[]|.Instances[0]|.PublicIpAddress'
-    )"
-  fi
+elif [[ "$1" == "ssh-port" ]];then shift
+  instance_ip="$( $get_ec2_ip_script $@ )"
   echo "connecting to: $instance_ip"
-
   : ${port:="9090"}
   ssh \
     -q \
@@ -150,6 +180,41 @@ elif [[ "$1" == "ssh-port" ]];then
     -o ConnectionAttempts=50 \
     -NL 0.0.0.0:${port}:127.0.0.1:${port} \
     ec2-user@${instance_ip}
+
+elif [[ "$1" == "ami-list" ]];then shift
+  raw_ami_list="$( aws ec2 describe-images \
+    --owners amazon \
+    --filters \
+    "Name=name,Values=amzn-ami-hvm-*" \
+    "Name=description,Values=Amazon Linux AMI *" \
+    "Name=creation-date,Values=2017*" \
+    "Name=is-public,Values=true" \
+    "Name=architecture,Values=x86_64" \
+    "Name=root-device-type,Values=ebs" \
+    "Name=virtualization-type,Values=hvm" \
+    "Name=hypervisor,Values=xen" \
+    "Name=state,Values=available" \
+    "Name=image-type,Values=machine" \
+    "Name=block-device-mapping.volume-type,Values=standard"
+  )"
+  if [[ "$long_output" -eq 1 ]];then
+    echo "$raw_ami_list"
+  else
+    jq ".Images|map(\
+      {Name,ImageId,State,ImageLocation,CreationDate,Description}\
+      )|sort_by(.CreationDate)" \
+      <<<"$raw_ami_list"
+  fi
+
+elif [[ "$1" == "ami-latest-id" ]];then shift
+  raw_latest_ami="$( $0 -l ami-list \
+    | jq -r -M '.Images | map(select(.Name|contains(".rc-")|not))|sort_by(.CreationDate)|reverse|.[0]'
+  )"
+  if [[ "$long_output" -eq 1 ]];then
+    echo "$raw_latest_ami"
+  else
+    jq -r ".ImageId" <<<"$raw_latest_ami"
+  fi
 
 elif [[ "$1" == "network-list" ]];then
   aws ec2 describe-network-interfaces \
@@ -164,9 +229,8 @@ NetworkInterfaceId\
 })\
 "
 
-elif [[ "$1" == "network-add" ]];then
-  shift;
-  get_instance_id_from_input $@
+elif [[ "$1" == "network-add" ]];then shift
+  instance_id="$( $get_ec2_id_script $@ )"
   interfaceid="$( aws ec2 create-network-interface \
           --subnet-id "${subnet_id}" \
           --groups "${security_group_id}" \
@@ -174,7 +238,7 @@ elif [[ "$1" == "network-add" ]];then
   )"
   attachmentid="$( aws ec2 attach-network-interface \
           --network-interface-id "$interfaceid" \
-          --instance-id "$instanceid" \
+          --instance-id "$instance_id" \
           --device-index 1 \
   | jq -M -r '.AttachmentId'
   )"
@@ -193,10 +257,10 @@ elif [[ "$1" == "network-attach" ]];then
   if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
     interfaceid="$1";shift
   fi
-  get_instance_id_from_input $@
+  instance_id="$( $get_ec2_id_script $@ )"
   attachmentid="$( aws ec2 attach-network-interface \
           --network-interface-id "$interfaceid" \
-          --instance-id "$instanceid" \
+          --instance-id "$instance_id" \
           --device-index 1
   | jq -M -r '.AttachmentId'
   )"
@@ -223,9 +287,9 @@ elif [[ "$1" == "address-list" ]];then
 
 elif [[ "$1" == "address-attach" ]];then
   shift
-  get_instance_id_from_input $@
+  instance_id="$( $get_ec2_id_script $@ )"
   aws ec2 associate-address \
-            --instance-id "$instanceid" \
+            --instance-id "$instance_id" \
             --allocation-id "${address_allocation_id}" \
             --allow-reassociation
 
