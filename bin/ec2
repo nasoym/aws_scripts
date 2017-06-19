@@ -228,6 +228,23 @@ NetworkInterfaceId\
 ,AttachedInstanceId:(.Attachment.InstanceId)\
 })\
 "
+elif [[ "$1" == "route53-set" ]];then
+  aws route53 \
+    change-resource-record-sets \
+    --hosted-zone-id "$HOSTED_ZONE_ID" \
+    --change-batch \
+    "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\
+\"Name\":\"${SUB_DOMAIN}\",\
+\"Type\":\"A\",\
+\"TTL\":60,\
+\"ResourceRecords\":[{\"Value\":\"${PUBLIC_IP}\"}]\
+}}]}"
+
+elif [[ "$1" == "route53-list" ]];then
+  aws route53 \
+    list-resource-record-sets \
+    --hosted-zone-id "$HOSTED_ZONE_ID" \
+    --query "ResourceRecordSets[?Type == 'A']"
 
 elif [[ "$1" == "network-add" ]];then shift
   instance_id="$( $get_ec2_id_script $@ )"
