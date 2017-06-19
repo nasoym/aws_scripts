@@ -53,7 +53,7 @@ if [[ "$#" -eq 0 ]];then
   $0 list
 
 elif [[ "$1" == "create" ]];then shift
-  if [[ "$#" -gt 1 ]];then
+  if [[ "$#" -ge 3 ]];then
     log "create instance names from arguments: $@"
     echo "$@" | tr ' ' '\n' | parallel "$0 create {} </dev/null"
 
@@ -102,7 +102,7 @@ elif [[ "$1" == "delete" ]];then shift
     | jq -r 'map(.InstanceId)[]' \
     | $0 delete
 
-  elif [[ "$#" -gt 1 ]];then
+  elif [[ "$#" -ge 3 ]];then
     log "delete instance names from arguments: $@"
     echo "$@" | tr ' ' '\n' | parallel "$0 delete {} </dev/null"
 
