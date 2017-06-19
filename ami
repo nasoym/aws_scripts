@@ -1,9 +1,22 @@
 #!/usr/bin/env bash
+set -eufo pipefail
+trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
 
-if [[ "$1" == "list" ]];then
-  aws ec2 describe-images \
+while getopts "hr" options; do case $options in
+  r) raw_output=1 ;;
+  h) exit ;;
+esac; done; shift $((OPTIND - 1))
+
+: ${raw_output:=0}
+
+if [[ "$#" -eq 0 ]];then
+  $0 list
+
+elif [[ "$1" == "list" ]];then shift
+  raw_ami_list="$( aws ec2 describe-images \
     --owners amazon \
-    --filters "Name=name,Values=amzn-ami-hvm-*" \
+    --filters \
+    "Name=name,Values=amzn-ami-hvm-*" \
     "Name=description,Values=Amazon Linux AMI *" \
     "Name=creation-date,Values=2017*" \
     "Name=is-public,Values=true" \
@@ -14,12 +27,24 @@ if [[ "$1" == "list" ]];then
     "Name=state,Values=available" \
     "Name=image-type,Values=machine" \
     "Name=block-device-mapping.volume-type,Values=standard"
+  )"
+  if [[ "$raw_output" -eq 1 ]];then
+    echo "$raw_ami_list"
+  else
+    jq ".Images|map(\
+      {Name,ImageId,State,ImageLocation,CreationDate,Description}\
+      )|sort_by(.CreationDate)" \
+      <<<"$raw_ami_list"
+  fi
 
-elif [[ "$1" == "latest" ]];then
-  $0 list \
-  | jq -r -M '.Images | map(select(.Name|contains(".rc-")|not))|sort_by(.CreationDate)|reverse|.[0]|.ImageId'
-
-else
-  $0 list
+elif [[ "$1" == "latest-id" ]];then shift
+  raw_latest_ami="$( $0 -r list \
+    | jq -r -M '.Images | map(select(.Name|contains(".rc-")|not))|sort_by(.CreationDate)|reverse|.[0]'
+  )"
+  if [[ "$raw_output" -eq 1 ]];then
+    echo "$raw_latest_ami"
+  else
+    jq -r ".ImageId" <<<"$raw_latest_ami"
+  fi
 
 fi
