@@ -270,7 +270,7 @@ elif [[ "$1" == "network-create" ]];then
   | jq -M -r '.NetworkInterface.NetworkInterfaceId'
 
 elif [[ "$1" == "network-attach" ]];then
-  shift;
+  shift
   if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
     interfaceid="$1";shift
   fi
