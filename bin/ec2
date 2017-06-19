@@ -117,10 +117,8 @@ elif [[ "$1" == "list" ]];then shift
 
   instances_list="$(jq ".Reservations|map(.Instances[0])" \
     <<<"$raw_instance_description" )"
-  if [[ $long_output -eq 1 ]];then
-    echo "$instances_list"
-  else
-    jq "map({\
+  if [[ $long_output -ne 1 ]];then
+    instances_list="$(jq "map({\
           InstanceId\
           ,state:.State.Name\
           ,Tags:(.Tags//[]|map(\"\\(.Key?)-\\(.Value?)\"))\
@@ -128,7 +126,13 @@ elif [[ "$1" == "list" ]];then shift
           ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
           })\
           |sort_by(.state)|reverse" \
-        <<<"$instances_list"
+          <<<"$instances_list")"
+  fi
+  if [[ "$#" -ge 1 ]] && [[ "$1" == "running" ]];then
+    echo "$instances_list" \
+      | jq 'map(select(.state=="running"))'
+  else
+    echo "$instances_list" | jq .
   fi
 
 elif [[ "$1" == "details" ]];then shift
