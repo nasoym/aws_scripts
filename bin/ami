@@ -47,4 +47,8 @@ elif [[ "$1" == "latest-id" ]];then shift
     jq -r ".ImageId" <<<"$raw_latest_ami"
   fi
 
+else
+  echo "unknown command: $@" >&2
+  exit 1
+
 fi
