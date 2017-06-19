@@ -52,7 +52,6 @@ if [[ "$#" -eq 0 ]];then
   $0 list
 
 elif [[ "$1" == "create" ]];then shift
-  clear_cache_file
   if [[ "$#" -gt 1 ]];then
     log "create instance names from arguments: $@"
     echo "$@" | tr ' ' '\n' | parallel "$0 create {} </dev/null"
@@ -71,17 +70,29 @@ elif [[ "$1" == "create" ]];then shift
               --placement "${placement}" \
       | jq -M -r '.Instances[0].InstanceId'
     )"
+    clear_cache_file
     if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
       instance_name="$1"; shift
-      log "name instance: $instance_name"
-      aws ec2 create-tags \
-        --resources ${instance_id} \
-        --tags "Key=Name,Value=${instance_name}"
+      $0 add-tag $instance_id $instance_name
       echo "created $instance_name: $instance_id"
     else
       echo "created: $instance_id"
     fi
   fi
+
+elif [[ "$1" == "add-tag" ]];then shift
+  if [[ "$#" -ge 2 ]];then
+    instance_id="$($get_ec2_id_script $1)"
+    tag_value="$2"
+  elif [[ "$#" -eq 1 ]];then
+    instance_id="$($get_ec2_id_script)"
+    tag_value="$1"
+  fi
+  : ${tag_key:="Name"}
+  aws ec2 create-tags \
+    --resources ${instance_id} \
+    --tags "Key=${tag_key},Value=${tag_value}"
+  clear_cache_file
 
 elif [[ "$1" == "delete" ]];then shift
   if [[ "$#" -eq  1 ]] && [[ "$1" == "all" ]];then
