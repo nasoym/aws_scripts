@@ -70,11 +70,11 @@ if [[ "$#" -eq 0 ]];then
 elif [[ "$1" == "create" ]];then shift
   if [[ "$#" -ge 3 ]];then
     log "create instance names from arguments: $@"
-    echo "$@" | tr ' ' '\n' | parallel -j 200% "$0 create {} </dev/null"
+    echo "$@" | tr ' ' '\n' | parallel --no-run-if-empty  -j 200% "$0 create {} </dev/null"
 
   elif [[ -p /dev/stdin ]]; then
     log "create instance names from stdin"
-    cat | parallel -j 200% "$0 create {} </dev/null"
+    cat | parallel --no-run-if-empty  -j 200% "$0 create {} </dev/null"
 
   else
     log "create one instance"
@@ -119,11 +119,11 @@ elif [[ "$1" == "delete" ]];then shift
 
   elif [[ "$#" -ge 2 ]];then
     log "delete instance names from arguments: $@"
-    echo "$@" | tr ' ' '\n' | parallel -j 200% "$0 delete {} </dev/null"
+    echo "$@" | tr ' ' '\n' | parallel --no-run-if-empty  -j 200% "$0 delete {} </dev/null"
 
   elif [[ -p /dev/stdin ]]; then
     log "delete instance names from stdin"
-    cat | parallel -j 200% "$0 delete {} </dev/null"
+    cat | parallel --no-run-if-empty -j 200% "$0 delete {} </dev/null"
 
   else
     instance_id="$( $get_ec2_id_script $@ )"
