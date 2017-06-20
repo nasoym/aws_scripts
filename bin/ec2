@@ -156,7 +156,7 @@ elif [[ "$1" == "list" ]];then shift
   fi
   if [[ "$#" -ge 1 ]] && [[ "$1" == "running" ]];then
     echo "$instances_list" \
-      | jq 'map(select(.State=="running")|del(.State))'
+      | jq 'map(select(.State=="running")|del(.State))|sort_by(.Name)'
   else
     echo "$instances_list" | jq .
   fi
