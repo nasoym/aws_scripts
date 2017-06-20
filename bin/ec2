@@ -323,6 +323,20 @@ elif [[ "$1" == "network-delete" ]];then
   aws ec2 delete-network-interface \
           --network-interface-id "$interfaceid"
 
+elif [[ "$1" == "billing" ]];then
+  aws cloudwatch get-metric-statistics \
+    --namespace "AWS/Billing" \
+    --metric-name "EstimatedCharges" \
+    --dimension "Name=ServiceName,Value=AmazonEC2" \
+    --start-time $(date +"%Y-%m-%dT%H:%M:00" --date="-14 days") \
+    --end-time $(date +"%Y-%m-%dT%H:%M:00") \
+    --statistic Maximum \
+    --period 3600
+
+    # --output text
+    # --dimension "Name=Currency,Value=USD" \
+     # --output text | sort -r -k 3 | head -n 1 | cut -f 2
+
 elif [[ "$1" == "group-list" ]];then
   aws ec2 describe-security-groups
 
@@ -340,8 +354,15 @@ elif [[ "$1" == "address-attach" ]];then
             --allocation-id "${address_allocation_id}" \
             --allow-reassociation
 
-# elif [[ "$1" == "metrics" ]];then
-# aws_scripts:aws cloudwatch get-metric-statistics --namespace AWS/EC2 --metric-name CPUUtilization --dimensions "Name=InstanceId,Value=i-0a03275ee2de78ebb" --statistics Maximum --start-time "2017-06-11T00:00:00" --end-time "2017-06-11T12:10:00" --period 60
+elif [[ "$1" == "metrics" ]];then
+  aws cloudwatch get-metric-statistics \
+    --namespace AWS/EC2 \
+    --metric-name CPUUtilization \
+    --dimensions "Name=InstanceId,Value=i-0a03275ee2de78ebb" \
+    --statistics Maximum \
+    --start-time "2017-06-11T00:00:00" \
+    --end-time "2017-06-11T14:00:00" \
+    --period 60
 
 else
   echo "unkown command: $@" >&2
