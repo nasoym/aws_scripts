@@ -64,6 +64,13 @@ fi
 : ${use_cache:=1}
 export long_output quiet use_cache
 
+: ${trace:=0}
+
+if [[ "$trace" -eq 1 ]];then
+  PS4='${LINENO}: '
+  set -x
+fi
+
 if [[ "$#" -eq 0 ]];then
   $0 list running
 
@@ -258,7 +265,7 @@ elif [[ "$1" == "ami-list" ]];then shift
 
 elif [[ "$1" == "ami-latest-id" ]];then shift
   raw_latest_ami="$( $0 -l ami-list \
-    | jq -r -M '.Images | map(select(.Name|contains(".rc-")|not))|sort_by(.CreationDate)|reverse|.[0]'
+    | jq -r -M '.Images | map(select(.Name|inside(".rc-")|not))|sort_by(.CreationDate)|reverse|.[0]'
   )"
   if [[ "$long_output" -eq 1 ]];then
     echo "$raw_latest_ami"
