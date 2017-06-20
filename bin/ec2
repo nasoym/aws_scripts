@@ -199,7 +199,8 @@ elif [[ "$1" == "ssh" ]];then shift
 
 elif [[ "$1" == "port-list" ]];then shift
   ps --no-headers -C ssh -opid,cmd \
-    | grep ec2-user \
+    | grep "ec2-user" \
+    | grep "\-N \-L" \
     | sed \
       -e 's/-o UserKnownHostsFile=\/dev\/null //g' \
       -e 's/-o StrictHostKeyChecking=no //g' \
