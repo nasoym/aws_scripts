@@ -46,10 +46,21 @@ while getopts "hlqnv" options; do case $options in
   h) exit ;;
 esac; done; shift $((OPTIND - 1))
 
-[[ -r ~/.aws_tools_rc ]] && { source ~/.aws_tools_rc; }
+: ${quiet:=1}
+
+: ${rc_file:="${HOME}/.ec2_rc"}
+if [[ -r "${rc_file}" ]]; then
+  log "found rc file: ${rc_file}"
+  if ( cd $( dirname $(realpath "$rc_file")); git diff-index --quiet HEAD -- ) ; then
+    source "${rc_file}"
+  else
+    echo "the rc file was either not in git or uncommitted changes found" >&2
+    exit 1
+  fi
+fi
+
 # set -a
 : ${long_output:=0}
-: ${quiet:=1}
 : ${use_cache:=1}
 export long_output quiet use_cache
 
