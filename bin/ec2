@@ -9,28 +9,32 @@ trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
 get_ec2_ip_script="$(dirname $(realpath $0))/lib/get_ec2_ip"
 get_ec2_id_script="$(dirname $(realpath $0))/lib/get_ec2_id"
 
-function log() {
-  if [[ "$quiet" -ne 1 ]];then
-    echo "$@" >&2
-  fi
-}
+: ${cache_folder:="${HOME}/.cache/ec2"}
+: ${cache_file_name:="instance_describe"}
+: ${cache_age_minutes:="30"}
 
 function clear_cache_file() {
-  if [[ "$use_cache" -eq 1 ]] && [[ -d "${HOME}/.cache/ec2" ]];then
-    find ${HOME}/.cache/ec2 -name 'list-[0-9T-]*' -delete
+  if [[ "$use_cache" -eq 1 ]] && [[ -d "${cache_folder}" ]];then
+    find "${cache_folder}" -name "${cache_file_name}" -delete
   fi
 }
 
 function get_cache_file() {
-  if [[ "$use_cache" -eq 1 ]] && [[ -d "${HOME}/.cache/ec2" ]];then
-    find ${HOME}/.cache/ec2 -name 'list-[0-9T-]*' -cmin -30 -print -quit
+  if [[ "$use_cache" -eq 1 ]] && [[ -d "${cache_folder}" ]];then
+    find "${cache_folder}" -name "${cache_file_name}" -mmin -${cache_age_minutes} -print -quit
   fi
 }
 
 function write_to_cache_file() {
   if [[ "$use_cache" -eq 1 ]];then
-    mkdir -p ${HOME}/.cache/ec2
-    cat > ${HOME}/.cache/ec2/list-$(date +%FT%H-%M-%S)
+    mkdir -p "${cache_folder}"
+    cat > ${cache_folder}/${cache_file_name}
+  fi
+}
+
+function log() {
+  if [[ "$quiet" -ne 1 ]];then
+    echo "$@" >&2
   fi
 }
 
