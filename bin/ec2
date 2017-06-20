@@ -117,7 +117,7 @@ elif [[ "$1" == "delete" ]];then shift
     | jq -r 'map(.InstanceId)[]' \
     | $0 delete
 
-  elif [[ "$#" -ge 3 ]];then
+  elif [[ "$#" -ge 2 ]];then
     log "delete instance names from arguments: $@"
     echo "$@" | tr ' ' '\n' | parallel -j 200% "$0 delete {} </dev/null"
 
