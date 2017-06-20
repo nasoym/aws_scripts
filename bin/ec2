@@ -148,7 +148,7 @@ elif [[ "$1" == "list" ]];then shift
     instances_list="$(jq "map({\
           InstanceId\
           ,State:.State.Name\
-          ,Name:(.Tags//[]|map(.Value?)[])\
+          ,Name:(.Tags//[]|map(.Value?))[0]\
           ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
           })\
           |sort_by(.State)|reverse" \
