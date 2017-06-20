@@ -110,14 +110,14 @@ elif [[ "$1" == "add-tag" ]];then shift
     --tags "Key=${tag_key},Value=${tag_value}"
   clear_cache_file
 
-elif [[ "$1" == "delete" ]];then shift
-  if [[ "$#" -eq  1 ]] && [[ "$1" == "all" ]];then
-    $0 list running \
+elif [[ "$1" == "delete-all" ]];then shift
+  $0 list running \
     | jq 'map(select(.State=="running"))' \
     | jq -r 'map(.InstanceId)[]' \
     | $0 delete
 
-  elif [[ "$#" -ge 2 ]];then
+elif [[ "$1" == "delete" ]];then shift
+  if [[ "$#" -ge 2 ]];then
     log "delete instance names from arguments: $@"
     echo "$@" | tr ' ' '\n' | parallel --no-run-if-empty  -j 200% "$0 delete {} </dev/null"
 
