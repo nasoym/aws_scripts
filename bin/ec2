@@ -65,7 +65,7 @@ fi
 export long_output quiet use_cache
 
 if [[ "$#" -eq 0 ]];then
-  $0 list
+  $0 list running
 
 elif [[ "$1" == "create" ]];then shift
   if [[ "$#" -ge 3 ]];then
@@ -113,7 +113,7 @@ elif [[ "$1" == "add-tag" ]];then shift
 elif [[ "$1" == "delete" ]];then shift
   if [[ "$#" -eq  1 ]] && [[ "$1" == "all" ]];then
     $0 list running \
-    | jq 'map(select(.state=="running"))' \
+    | jq 'map(select(.State=="running"))' \
     | jq -r 'map(.InstanceId)[]' \
     | $0 delete
 
@@ -147,17 +147,16 @@ elif [[ "$1" == "list" ]];then shift
   if [[ $long_output -ne 1 ]];then
     instances_list="$(jq "map({\
           InstanceId\
-          ,state:.State.Name\
-          ,Tags:(.Tags//[]|map(\"\\(.Key?)-\\(.Value?)\"))\
-          ,PublicIpAddress\
+          ,State:.State.Name\
+          ,Name:(.Tags//[]|map(.Value?)[])\
           ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
           })\
-          |sort_by(.state)|reverse" \
+          |sort_by(.State)|reverse" \
           <<<"$instances_list")"
   fi
   if [[ "$#" -ge 1 ]] && [[ "$1" == "running" ]];then
     echo "$instances_list" \
-      | jq 'map(select(.state=="running"))'
+      | jq 'map(select(.State=="running")|del(.State))'
   else
     echo "$instances_list" | jq .
   fi

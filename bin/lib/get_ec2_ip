@@ -18,13 +18,13 @@ elif [[ "$#" -ge 1 ]] && [[ "$1" =~ ^i-[0-9a-f]*$ ]];then
 
 elif [[ "$#" -ge 1 ]];then
   instance_ip="$($ec2_script -l list \
-    | jq -r "map(select(.Tags//[]|contains([{Value:\"$1\"}])))\
+    | jq -r "map(select(.Tags//[]|contains([{Key:\"Name\",Value:\"$1\"}])))\
             |.[0].PublicIpAddress//empty"
   )"
 
 else
   instance_ip="$($ec2_script list \
-    | jq 'map(select(.state=="running"))' \
+    | jq 'map(select(.State=="running"))' \
     | jq -r '.[0].PublicIpAddress//empty')"
 fi
 
