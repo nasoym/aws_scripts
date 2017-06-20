@@ -68,7 +68,7 @@ if [[ "$#" -eq 0 ]];then
   $0 list running
 
 elif [[ "$1" == "create" ]];then shift
-  if [[ "$#" -ge 3 ]];then
+  if [[ "$#" -ge 2 ]];then
     log "create instance names from arguments: $@"
     echo "$@" | tr ' ' '\n' | parallel --no-run-if-empty  -j 200% "$0 create {} </dev/null"
 
