@@ -178,18 +178,26 @@ elif [[ "$1" == "get-id" ]];then shift
   $get_ec2_id_script $@
 
 elif [[ "$1" == "ssh" ]];then shift
-  instance_ip="$( $get_ec2_ip_script $@ )"
-  [[ "$#" -ge 1 ]] && { shift; }
-  ssh \
-    -q \
-    -i ${private_key_location} \
-    -o UserKnownHostsFile=/dev/null \
-    -o StrictHostKeyChecking=no \
-    -o ConnectTimeout=30 \
-    -o ConnectionAttempts=50 \
-    ec2-user@${instance_ip} \
-    $@ \
-  || true
+  if [[ "$#" -ge 2 ]] && [[ -p /dev/stdin ]]; then
+    input="$(cat)"
+    echo "$@" | tr ' ' '\n' \
+      | parallel --no-run-if-empty  -j 200% \
+      "echo \"${input}\" | $0 ssh {}"
+
+  else
+    instance_ip="$( $get_ec2_ip_script $@ )"
+    [[ "$#" -ge 1 ]] && { shift; }
+    ssh \
+      -q \
+      -i ${private_key_location} \
+      -o UserKnownHostsFile=/dev/null \
+      -o StrictHostKeyChecking=no \
+      -o ConnectTimeout=30 \
+      -o ConnectionAttempts=50 \
+      ec2-user@${instance_ip} \
+      $@ \
+    || true
+  fi
 
 elif [[ "$1" == "port-list" ]];then shift
   ps --no-headers -C ssh -opid,cmd \
