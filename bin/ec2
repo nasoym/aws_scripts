@@ -119,7 +119,6 @@ elif [[ "$1" == "add-tag" ]];then shift
 
 elif [[ "$1" == "delete-all" ]];then shift
   $0 list running \
-    | jq 'map(select(.State=="running"))' \
     | jq -r 'map(.InstanceId)[]' \
     | $0 delete
 
