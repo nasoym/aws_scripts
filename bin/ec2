@@ -81,7 +81,7 @@ elif [[ "$1" == "create" ]];then shift
 
   elif [[ -p /dev/stdin ]]; then
     log "create instance names from stdin"
-    cat | parallel --no-run-if-empty  -j 200% "$0 create {} </dev/null"
+    parallel --no-run-if-empty  -j 200% "$0 create {} </dev/null"
 
   else
     log "create one instance"
@@ -130,12 +130,10 @@ elif [[ "$1" == "delete" ]];then shift
 
   elif [[ -p /dev/stdin ]]; then
     log "delete instance names from stdin"
-    cat | parallel --no-run-if-empty -j 200% "$0 delete {} </dev/null"
+    parallel --no-run-if-empty -j 200% "$0 delete {} </dev/null"
 
   else
-    instance_id="$( $get_ec2_id_script $@ )"
-    aws ec2 terminate-instances \
-      --instance-ids "$instance_id"
+    aws ec2 terminate-instances --instance-ids "$($get_ec2_id_script $@)"
     clear_cache_file
   fi
 
@@ -174,35 +172,24 @@ elif [[ "$1" == "details" ]];then shift
     | jq "map(select(.InstanceId==\"${instance_id}\"))[]"
 
 elif [[ "$1" == "get-ip" ]];then shift
-  instance_ip="$( $get_ec2_ip_script $@ )"
-  echo "$instance_ip"
+  $get_ec2_ip_script $@
 
 elif [[ "$1" == "get-id" ]];then shift
-  instance_id="$( $get_ec2_id_script $@ )"
-  echo "$instance_id"
+  $get_ec2_id_script $@
 
 elif [[ "$1" == "ssh" ]];then shift
   instance_ip="$( $get_ec2_ip_script $@ )"
-  log "connecting to: $instance_ip"
-  if [[ ! -t 0 ]]; then
-    ssh \
-      -q \
-      -i ${private_key_location} \
-      -o UserKnownHostsFile=/dev/null \
-      -o StrictHostKeyChecking=no \
-      -o ConnectTimeout=30 \
-      -o ConnectionAttempts=50 \
-      ec2-user@${instance_ip} <<<"$(cat)"
-  else
-    ssh \
-      -q \
-      -i ${private_key_location} \
-      -o UserKnownHostsFile=/dev/null \
-      -o StrictHostKeyChecking=no \
-      -o ConnectTimeout=30 \
-      -o ConnectionAttempts=50 \
-      ec2-user@${instance_ip}
-  fi
+  [[ "$#" -ge 1 ]] && { shift; }
+  ssh \
+    -q \
+    -i ${private_key_location} \
+    -o UserKnownHostsFile=/dev/null \
+    -o StrictHostKeyChecking=no \
+    -o ConnectTimeout=30 \
+    -o ConnectionAttempts=50 \
+    ec2-user@${instance_ip} \
+    $@ \
+  || true
 
 elif [[ "$1" == "port-list" ]];then shift
   ps --no-headers -C ssh -opid,cmd \
@@ -219,10 +206,7 @@ elif [[ "$1" == "port-list" ]];then shift
 elif [[ "$1" == "port" ]];then shift
   instance_ip="$( $get_ec2_ip_script $1 )"; shift
   remote_port="$1"; shift
-  if [[ "$#" -ge 1 ]];then
-    local_port="$1"; shift
-  fi
-  : ${local_port:="$remote_port"}
+  local_port="${1-"${remote_port}"}"
   : ${remote_host:="127.0.0.1"}
   : ${local_host:="0.0.0.0"}
   echo "forward port from $instance_ip at ${remote_host}:${remote_port} to ${local_host}:${local_port}"
