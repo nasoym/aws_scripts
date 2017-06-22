@@ -23,8 +23,7 @@ elif [[ "$#" -ge 1 ]];then
   )"
 
 else
-  instance_ip="$($ec2_script list \
-    | jq 'map(select(.State=="running"))' \
+  instance_ip="$($ec2_script list running \
     | jq -r '.[0].PublicIpAddress//empty')"
 fi
 
