@@ -153,6 +153,7 @@ elif [[ "$1" == "list" ]];then shift
           InstanceId\
           ,State:.State.Name\
           ,Name:(.Tags//[]|map(.Value?))[0]\
+          ,PublicIpAddress\
           ,PrivateIpAddresses:(.NetworkInterfaces|map(.PrivateIpAddress))\
           })\
           |sort_by(.State)|reverse" \
