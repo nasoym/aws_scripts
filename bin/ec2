@@ -65,6 +65,7 @@ fi
 export long_output quiet use_cache
 
 : ${trace:=0}
+export trace
 
 if [[ "$trace" -eq 1 ]];then
   PS4='${LINENO}: '
