@@ -6,6 +6,14 @@ set -o errexit
 set -o nounset
 trap 'echo "$0: line ${LINENO}: exiting because of error";exit 1' ERR
 
+: ${trace:=0}
+export trace
+
+if [[ "$trace" -eq 1 ]];then
+  PS4='${LINENO}: '
+  set -x
+fi
+
 ec2_script="$(dirname $(realpath $0))/../ec2"
 
 if [[ "$#" -ge 1 ]] && [[ "$1" =~ ^[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*$ ]];then
@@ -18,7 +26,7 @@ elif [[ "$#" -ge 1 ]] && [[ "$1" =~ ^i-[0-9a-f]*$ ]];then
 
 elif [[ "$#" -ge 1 ]];then
   instance_ip="$($ec2_script -l list \
-    | jq -r "map(select(.Tags//[]|inside([{Key:\"Name\",Value:\"$1\"}])))\
+    | jq -r "map(select(.State.Name==\"running\"))|map(select(.Tags//[]|inside([{Key:\"Name\",Value:\"$1\"}])))\
             |.[0].PublicIpAddress//empty"
   )"
 
