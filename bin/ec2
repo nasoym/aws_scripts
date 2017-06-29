@@ -205,6 +205,7 @@ elif [[ "$1" == "scp" ]];then shift
   target_folder="$1"; shift
   scp \
     -q \
+    -r \
     -i ${private_key_location} \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
