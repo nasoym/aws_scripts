@@ -26,10 +26,8 @@ function get_cache_file() {
 }
 
 function write_to_cache_file() {
-  if [[ "$use_cache" -eq 1 ]];then
-    mkdir -p "${cache_folder}"
-    cat > ${cache_folder}/${cache_file_name}
-  fi
+  mkdir -p "${cache_folder}"
+  cat > ${cache_folder}/${cache_file_name}
 }
 
 function log() {
