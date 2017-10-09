@@ -90,10 +90,9 @@ elif [[ "$1" == "create" ]];then shift
               --instance-type "${instance_type}" \
               --security-groups "${security_group}" \
               --placement "${placement}" \
-              --iam-instance-profile "Name=${role}" \
+              --iam-instance-profile "Name=${profile}" \
       | jq -M -r '.Instances[0].InstanceId'
     )"
-              # ${role:+"--iam-instance-profile \"Name=${role}\""} \
     clear_cache_file
     if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
       instance_name="$1"; shift
@@ -117,6 +116,12 @@ elif [[ "$1" == "add-tag" ]];then shift
     --resources ${instance_id} \
     --tags "Key=${tag_key},Value=${tag_value}"
   clear_cache_file
+
+elif [[ "$1" == "iam-profile" ]];then shift
+  instance_id="$( $get_ec2_id_script $@ )"
+  aws ec2 associate-iam-instance-profile \
+    --instance-id "${instance_id}" \
+    --iam-instance-profile "Name=${profile}"
 
 elif [[ "$1" == "delete-all" ]];then shift
   $0 list running \
