@@ -90,7 +90,7 @@ elif [[ "$1" == "create" ]];then shift
               --instance-type "${instance_type}" \
               --security-groups "${security_group}" \
               --placement "${placement}" \
-              --iam-instance-profile "Name=${profile}" \
+              ${iam_profile:+--iam-instance-profile "Name=${iam_profile}"} \
       | jq -M -r '.Instances[0].InstanceId'
     )"
     clear_cache_file
