@@ -211,6 +211,20 @@ elif [[ "$1" == "scp" ]];then shift
     $@ \
     ec2-user@${instance_ip}:/home/ec2-user/${target_folder}
 
+elif [[ "$1" == "scp_get" ]];then shift
+  instance_ip="$( $get_ec2_ip_script $1 )"; shift
+  target_folder="$1"; shift
+  scp \
+    -q \
+    -r \
+    -i ${private_key_location} \
+    -o UserKnownHostsFile=/dev/null \
+    -o StrictHostKeyChecking=no \
+    -o ConnectTimeout=30 \
+    -o ConnectionAttempts=50 \
+    ec2-user@${instance_ip}:/home/ec2-user/${target_folder} \
+    $@
+
 elif [[ "$1" == "port-list" ]];then shift
   ps --no-headers -C ssh -opid,cmd \
     | grep "ec2-user" \
