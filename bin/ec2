@@ -188,7 +188,6 @@ elif [[ "$1" == "ssh" ]];then shift
   [[ "$#" -ge 1 ]] && { shift; }
   ssh \
     -q \
-    -i ${private_key_location} \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o ConnectTimeout=30 \
@@ -203,7 +202,6 @@ elif [[ "$1" == "scp" ]];then shift
   scp \
     -q \
     -r \
-    -i ${private_key_location} \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o ConnectTimeout=30 \
@@ -217,7 +215,6 @@ elif [[ "$1" == "scp_get" ]];then shift
   scp \
     -q \
     -r \
-    -i ${private_key_location} \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o ConnectTimeout=30 \
@@ -246,7 +243,6 @@ elif [[ "$1" == "port" ]];then shift
   echo "forward port from $instance_ip at ${remote_host}:${remote_port} to ${local_host}:${local_port}"
   ssh \
     -q \
-    -i ${private_key_location} \
     -o UserKnownHostsFile=/dev/null \
     -o StrictHostKeyChecking=no \
     -o ConnectTimeout=30 \
