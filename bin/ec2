@@ -13,6 +13,8 @@ get_ec2_id_script="$(dirname $(realpath $0))/lib/get_ec2_id"
 : ${cache_file_name:="instance_describe"}
 : ${cache_age_minutes:="30"}
 
+self="$(dirname $(realpath $0))"
+
 function clear_cache_file() {
   if [[ "$use_cache" -eq 1 ]] && [[ -d "${cache_folder}" ]];then
     find "${cache_folder}" -name "${cache_file_name}" -delete
@@ -93,6 +95,7 @@ elif [[ "$1" == "create" ]];then shift
               ${iam_profile:+--iam-instance-profile "Name=${iam_profile}"} \
       | jq -M -r '.Instances[0].InstanceId'
     )"
+              # --block-device-mappings file://${self}/ec2-block-device.json \
     clear_cache_file
     if [[ "$#" -ge 1 ]] && [[ -n "$1" ]];then
       instance_name="$1"; shift
