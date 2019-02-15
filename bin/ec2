@@ -261,7 +261,7 @@ elif [[ "$1" == "ami-list" ]];then shift
     --filters \
     "Name=name,Values=amzn-ami-hvm-*" \
     "Name=description,Values=Amazon Linux AMI *" \
-    "Name=creation-date,Values=2017*" \
+    "Name=creation-date,Values=2018*" \
     "Name=is-public,Values=true" \
     "Name=architecture,Values=x86_64" \
     "Name=root-device-type,Values=ebs" \
