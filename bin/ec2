@@ -75,6 +75,9 @@ fi
 if [[ "$#" -eq 0 ]];then
   $0 list running
 
+elif [[ "$1" == "clear" ]];then shift
+    clear_cache_file
+
 elif [[ "$1" == "create" ]];then shift
   if [[ "$#" -ge 2 ]];then
     log "create instance names from arguments: $@"
