@@ -244,8 +244,8 @@ elif [[ "$1" == "port" ]];then shift
   instance_ip="$( $get_ec2_ip_script $1 )"; shift
   remote_port="$1"; shift
   local_port="${1-"${remote_port}"}"
-  : ${remote_host:="127.0.0.1"}
-  : ${local_host:="0.0.0.0"}
+  : ${remote_host:="0.0.0.0"}
+  : ${local_host:="127.0.0.1"}
   echo "forward port from $instance_ip at ${remote_host}:${remote_port} to ${local_host}:${local_port}"
   ssh \
     -q \
